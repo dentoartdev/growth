@@ -1,19 +1,16 @@
 "use client";
-import { useState, useTransition } from "react";
-import { setPlanStatus, updatePlanItem } from "@/app/actions";
+import { useState } from "react";
+import type { PlanItem as Item } from "@/lib/plan";
 
-type Item = {
-  id: number; day: string; format: string; pillar: string; title: string; hook: string | null; caption: string | null;
-  cta: string | null; best_time: string | null; status: string; notes: string | null;
-};
-type Day = { day: string; label: string; isToday: boolean; dow: number };
+type Day = { day: string; label: string; isToday: boolean };
+type Patch = Partial<Pick<Item, "status" | "title" | "hook" | "caption" | "cta" | "notes">>;
 
 const STATUS = [
   { k: "idea", l: "Idea" }, { k: "ready", l: "Ready" }, { k: "posted", l: "Posted" }, { k: "skipped", l: "Skipped" },
 ];
 
-export default function PlanBoard({ days, items }: { days: Day[]; items: Item[] }) {
-  const [openId, setOpenId] = useState<number | null>(null);
+export default function PlanBoard({ days, items, onChange }: { days: Day[]; items: Item[]; onChange: (id: string, p: Patch) => void }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   const open = items.find((i) => i.id === openId) || null;
   return (
     <div className={open ? "grid2 planopen" : ""}>
@@ -37,13 +34,12 @@ export default function PlanBoard({ days, items }: { days: Day[]; items: Item[] 
           );
         })}
       </div>
-      {open && <Detail key={open.id} item={open} when={days.find((d) => d.day === open.day)?.label || open.day} onClose={() => setOpenId(null)} />}
+      {open && <Detail key={open.id} item={open} onChange={(p) => onChange(open.id, p)} when={days.find((d) => d.day === open.day)?.label || open.day} onClose={() => setOpenId(null)} />}
     </div>
   );
 }
 
-function Detail({ item, when, onClose }: { item: Item; when: string; onClose: () => void }) {
-  const [pending, start] = useTransition();
+function Detail({ item, when, onClose, onChange }: { item: Item; when: string; onClose: () => void; onChange: (p: Patch) => void }) {
   const [edit, setEdit] = useState(false);
   const [f, setF] = useState({ title: item.title, hook: item.hook || "", caption: item.caption || "", cta: item.cta || "", notes: item.notes || "" });
   const [copied, setCopied] = useState(false);
@@ -67,7 +63,7 @@ function Detail({ item, when, onClose }: { item: Item; when: string; onClose: ()
               </label>
             ))}
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn gold" disabled={pending} onClick={() => start(async () => { await updatePlanItem(item.id, f); setEdit(false); })}>Save</button>
+              <button className="btn gold" onClick={() => { onChange(f); setEdit(false); }}>Save</button>
               <button className="btn" onClick={() => setEdit(false)}>Cancel</button>
             </div>
           </>
@@ -86,7 +82,7 @@ function Detail({ item, when, onClose }: { item: Item; when: string; onClose: ()
         <div className="field"><div className="k">Status</div>
           <div className="filters">
             {STATUS.map((s) => (
-              <a key={s.k} href="#" className={item.status === s.k ? "on" : ""} onClick={(e) => { e.preventDefault(); start(() => setPlanStatus(item.id, s.k)); }}>{s.l}</a>
+              <a key={s.k} href="#" className={item.status === s.k ? "on" : ""} onClick={(e) => { e.preventDefault(); onChange({ status: s.k }); }}>{s.l}</a>
             ))}
           </div>
         </div>

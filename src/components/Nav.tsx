@@ -38,7 +38,7 @@ export function SideNav() {
           <Link key={it.href} href={it.href} className={on(it.href) ? "on" : ""}>{icon(it.icon)}<span>{it.label}</span></Link>
         ))}
       </nav>
-      <div className="foot"><img src="/logo-black.png" alt="Dento Art" /></div>
+      <div className="foot"><img src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/logo-black.png`} alt="Dento Art" /></div>
     </aside>
   );
 }

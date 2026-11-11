@@ -1,7 +1,10 @@
 "use client";
-import { useState, useTransition } from "react";
-import { saveAd, deleteAd, type AdInput } from "@/app/actions";
+import { useState } from "react";
 
+export type AdInput = {
+  id?: number; name: string; goal: string; start_day: string; end_day: string; daily_budget: number; spend: number;
+  reach: number; clicks: number; messages: number; new_clients: number; status: string; notes: string;
+};
 export type Ad = AdInput & { id: number };
 
 const EMPTY: AdInput = { name: "", goal: "Messages", start_day: "", end_day: "", daily_budget: 50, spend: 0, reach: 0, clicks: 0, messages: 0, new_clients: 0, status: "planned", notes: "" };
@@ -16,9 +19,8 @@ function verdict(a: Ad): { t: string; c: string } {
   return cpm < 15 ? { t: "Good", c: "grn" } : cpm <= 35 ? { t: "OK", c: "gold" } : { t: "Stop it", c: "red" };
 }
 
-export default function AdsManager({ ads }: { ads: Ad[] }) {
+export default function AdsManager({ ads, onSave, onDelete }: { ads: Ad[]; onSave: (a: Ad) => void; onDelete: (id: number) => void }) {
   const [form, setForm] = useState<AdInput | null>(null);
-  const [pending, start] = useTransition();
   const set = (k: keyof AdInput, v: string) =>
     setForm((f) => f && { ...f, [k]: ["daily_budget", "spend", "reach", "clicks", "messages", "new_clients"].includes(k) ? Number(v) || 0 : v });
 
@@ -45,9 +47,9 @@ export default function AdsManager({ ads }: { ads: Ad[] }) {
               <label className="span4">Notes<textarea className="in" value={form.notes} placeholder="Audience, which post, what you changed…" onChange={(e) => set("notes", e.target.value)} /></label>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button className="btn gold" disabled={pending} onClick={() => start(async () => { await saveAd(form); setForm(null); })}>Save</button>
+              <button className="btn gold" onClick={() => { onSave({ ...form, name: form.name.trim() || "Untitled ad", id: form.id ?? Date.now() }); setForm(null); }}>Save</button>
               <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-              {form.id && <button className="btn" style={{ marginLeft: "auto", color: "var(--red)" }} onClick={() => { if (confirm("Delete this ad?")) start(async () => { await deleteAd(form.id!); setForm(null); }); }}>Delete</button>}
+              {form.id && <button className="btn" style={{ marginLeft: "auto", color: "var(--red)" }} onClick={() => { if (confirm("Delete this ad?")) { onDelete(form.id!); setForm(null); } }}>Delete</button>}
             </div>
           </div>
         )}

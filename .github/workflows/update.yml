@@ -1,0 +1,57 @@
+name: Update & publish
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # every day 07:00 Dubai
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sync Instagram
+        if: github.event_name != 'push'
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+        run: node scripts/sync.mjs
+      - name: Save the new data
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "growth-bot"
+          git config user.email "growth-bot@users.noreply.github.com"
+          git add public/data.json public/thumbs
+          git diff --cached --quiet || (git commit -m "Daily Instagram data" && git push)
+      - name: Build site
+        env:
+          NEXT_PUBLIC_BASE_PATH: /growth
+        run: npx next build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

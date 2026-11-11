@@ -1,10 +1,9 @@
-import { db } from "@/lib/db";
+"use client";
+import { useStored } from "@/lib/store";
 import AdsManager, { type Ad } from "@/components/AdsManager";
 
-export const dynamic = "force-dynamic";
-
 export default function Ads() {
-  const ads = (db().prepare("SELECT * FROM ads ORDER BY COALESCE(start_day, created_at) DESC").all() as unknown as Ad[]).map((r) => ({ ...r }));
+  const [ads, setAds] = useStored<Ad[]>("ads", []);
   const spend = ads.reduce((a, b) => a + b.spend, 0);
   const msgs = ads.reduce((a, b) => a + b.messages, 0);
   const clients = ads.reduce((a, b) => a + b.new_clients, 0);
@@ -23,7 +22,8 @@ export default function Ads() {
         </div>
       </header>
       <div className="content">
-        <AdsManager ads={ads} />
+        <AdsManager ads={ads} onSave={(a) => setAds((list) => (list.some((x) => x.id === a.id) ? list.map((x) => (x.id === a.id ? a : x)) : [a, ...list]))}
+          onDelete={(id) => setAds((list) => list.filter((x) => x.id !== id))} />
         <div className="grid2">
           <section className="card">
             <div className="hd"><h2>How to run a good ad</h2></div>
@@ -43,7 +43,7 @@ export default function Ads() {
               <div className="tip do"><span className="dot" style={{ background: "var(--grn)" }} /><div><b>Good: under 15 AED per message</b><p>Keep it running and raise the budget slowly (+20% every 3 days).</p></div></div>
               <div className="tip do"><span className="dot" /><div><b>OK: 15–35 AED per message</b><p>Try a different picture or first line before spending more.</p></div></div>
               <div className="tip urgent"><span className="dot" /><div><b>Stop: over 35 AED, or no messages after 3 days</b><p>Turn it off and test another post.</p></div></div>
-              <div className="note" style={{ marginTop: 10 }}>Rough guide for the Gulf dental market. The app learns your real numbers as you add ads.</div>
+              <div className="note" style={{ marginTop: 10 }}>Rough guide for the Gulf dental market. Ads are saved on this device only.</div>
             </div>
           </section>
         </div>

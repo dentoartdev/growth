@@ -1,5 +1,4 @@
-import "server-only";
-import { allPosts, db, type Post } from "./db";
+import type { Post, Account } from "./data";
 import { dubaiDay, daysBetween, addDays, fmt } from "./dates";
 
 export const TARGET_POSTS_PER_WEEK = 4;
@@ -27,10 +26,10 @@ export type ScoredPost = Post & {
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
-export function scoredPosts(): ScoredPost[] {
-  const posts = allPosts();
-  const recent = posts.slice(0, 60);
-  const base = avg(recent.map((p) => p.reach)) || 1;
+export function scoredPosts(posts: Post[]): ScoredPost[] {
+  // Compare against the MEDIAN of the last 60 posts, so one viral post doesn't make everything look weak.
+  const recent = posts.slice(0, 60).map((p) => p.reach).sort((a, b) => a - b);
+  const base = recent.length ? recent[Math.floor(recent.length / 2)] || 1 : 1;
   return posts.map((p) => {
     const engagement = p.likes + p.comments + p.saves + p.shares;
     const rate = p.reach ? engagement / p.reach : 0;
@@ -52,9 +51,8 @@ function groupBy(posts: ScoredPost[], key: (p: ScoredPost) => string): Group[] {
 
 export type Tip = { level: "urgent" | "do" | "idea"; title: string; why: string };
 
-export function overview(live = true) {
-  const posts = scoredPosts();
-  const today = dubaiDay();
+export function overview(raw: Post[], snap: Account | null, live: boolean, today: string = dubaiDay()) {
+  const posts = scoredPosts(raw);
   const last = posts[0];
   const lastDay = last ? dubaiDay(new Date(last.posted_at)) : null;
   const daysSinceLast = lastDay ? daysBetween(lastDay, today) : null;
@@ -78,8 +76,6 @@ export function overview(live = true) {
   const byFormat = groupBy(posts.slice(0, 120), (p) => p.format);
   const byTopic = groupBy(posts.slice(0, 120), (p) => p.topic);
 
-  const snap = db().prepare("SELECT * FROM account_snapshots ORDER BY day DESC LIMIT 1").get() as
-    | { day: string; followers: number; media_count: number } | undefined;
 
   const best = [...posts].sort((a, b) => b.reach - a.reach).slice(0, 6);
   const bestRecent = [...posts.slice(0, 30)].sort((a, b) => b.reach - a.reach).slice(0, 3);
@@ -116,6 +112,3 @@ export function overview(live = true) {
   };
 }
 
-export function lastSync(): { at: string; ok: number; message: string } | null {
-  return (db().prepare("SELECT at, ok, message FROM sync_runs ORDER BY id DESC LIMIT 1").get() as never) ?? null;
-}

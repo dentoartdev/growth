@@ -3,12 +3,14 @@ import "./globals.css";
 import { SideNav, TabBar } from "@/components/Nav";
 import RegisterSW from "@/components/RegisterSW";
 
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const metadata: Metadata = {
   title: "Growth · Dento Art",
   description: "Instagram coach for @dentoart.dubai",
-  manifest: "/manifest.webmanifest",
+  manifest: `${BASE}/manifest.webmanifest`,
   appleWebApp: { capable: true, title: "Growth", statusBarStyle: "black-translucent" },
-  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: `${BASE}/icon-192.png`, apple: `${BASE}/apple-touch-icon.png` },
 };
 
 export const viewport: Viewport = { themeColor: "#13161D", width: "device-width", initialScale: 1, viewportFit: "cover" };

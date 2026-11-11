@@ -1,22 +1,24 @@
-import Link from "next/link";
+"use client";
+import { useMemo, useState } from "react";
+import { useData } from "@/lib/data";
 import { overview, scoredPosts } from "@/lib/analysis";
-import { isConnected } from "@/lib/instagram";
 import { fmt } from "@/lib/dates";
 import PostCard from "@/components/PostCard";
-
-export const dynamic = "force-dynamic";
+import Loading from "@/components/Loading";
 
 const FILTERS = ["All", "Reel", "Carousel", "Photo", "Top"];
 
-export default async function Posts({ searchParams }: { searchParams: Promise<{ f?: string; n?: string }> }) {
-  const sp = await searchParams;
-  const f = FILTERS.includes(sp.f || "") ? sp.f! : "All";
-  const n = Math.min(312, Number(sp.n) || 24);
-  const o = overview(isConnected());
-  let posts = scoredPosts();
-  if (f === "Top") posts = [...posts].sort((a, b) => b.reach - a.reach);
-  else if (f !== "All") posts = posts.filter((p) => p.format === f);
-  const shown = posts.slice(0, n);
+export default function Posts() {
+  const data = useData();
+  const [f, setF] = useState("All");
+  const [n, setN] = useState(24);
+  const o = useMemo(() => (data ? overview(data.posts, data.account, data.live) : null), [data]);
+  const all = useMemo(() => (data ? scoredPosts(data.posts) : []), [data]);
+  if (!data || !o) return <Loading title="What’s working" />;
+
+  let posts = all;
+  if (f === "Top") posts = [...all].sort((a, b) => b.reach - a.reach);
+  else if (f !== "All") posts = all.filter((p) => p.format === f);
   const maxTopic = o.byTopic[0]?.avgReach || 1;
 
   return (
@@ -50,10 +52,10 @@ export default async function Posts({ searchParams }: { searchParams: Promise<{ 
         </div>
 
         <div className="filters">
-          {FILTERS.map((x) => <Link key={x} href={`/posts?f=${x}`} className={f === x ? "on" : ""}>{x === "Top" ? "Best ever" : x}</Link>)}
+          {FILTERS.map((x) => <a key={x} href="#" className={f === x ? "on" : ""} onClick={(e) => { e.preventDefault(); setF(x); setN(24); }}>{x === "Top" ? "Best ever" : x}</a>)}
         </div>
-        <div className="posts">{shown.map((p) => <PostCard key={p.id} p={p} />)}</div>
-        {posts.length > n && <div style={{ textAlign: "center" }}><Link className="btn" href={`/posts?f=${f}&n=${n + 24}`}>Show more</Link></div>}
+        <div className="posts">{posts.slice(0, n).map((p) => <PostCard key={p.id} p={p} />)}</div>
+        {posts.length > n && <div style={{ textAlign: "center" }}><button className="btn" onClick={() => setN(n + 24)}>Show more</button></div>}
       </div>
     </>
   );

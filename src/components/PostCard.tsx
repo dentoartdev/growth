@@ -1,12 +1,13 @@
 import type { ScoredPost } from "@/lib/analysis";
 import { fmt, prettyDate } from "@/lib/dates";
+import { asset } from "@/lib/data";
 
 const VCLASS: Record<string, string> = { Top: "gold", Good: "grn", Average: "", Weak: "red" };
 
 export default function PostCard({ p }: { p: ScoredPost }) {
   const body = (
     <>
-      <div className="img" style={p.thumb ? { backgroundImage: `url(${p.thumb})` } : undefined}>
+      <div className="img" style={p.thumb ? { backgroundImage: `url(${asset(p.thumb)})` } : undefined}>
         {!p.thumb && <span>{p.format}</span>}
         <span className="fmt">{p.format}</span>
         <span className={`tag vd ${VCLASS[p.verdict]}`}>{p.verdict}</span>

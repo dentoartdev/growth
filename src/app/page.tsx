@@ -1,48 +1,59 @@
+"use client";
 import Link from "next/link";
-import { overview, lastSync, TARGET_POSTS_PER_WEEK } from "@/lib/analysis";
-import { ensurePlan, planBetween, DAILY_HABITS } from "@/lib/plan";
-import { db } from "@/lib/db";
-import { isConnected } from "@/lib/instagram";
-import { fmt, prettyDay, prettyDate, addDays, weekStart } from "@/lib/dates";
+import { useMemo } from "react";
+import { useData } from "@/lib/data";
+import { useStored } from "@/lib/store";
+import { overview, TARGET_POSTS_PER_WEEK } from "@/lib/analysis";
+import { weekPlan, DAILY_HABITS, type PlanEdits } from "@/lib/plan";
+import { fmt, prettyDay, prettyDate, addDays, weekStart, dubaiDay } from "@/lib/dates";
 import Checklist, { type CheckItem } from "@/components/Checklist";
 import PostCard from "@/components/PostCard";
+import Loading from "@/components/Loading";
 import { SettingsIcon } from "@/components/Nav";
 
-export const dynamic = "force-dynamic";
-
 export default function Today() {
-  const connected = isConnected();
-  const o = overview(connected);
-  ensurePlan(o.today);
-  const todays = planBetween(o.today, o.today);
-  const ws = weekStart(o.today);
-  const week = planBetween(ws, addDays(ws, 6));
-  const upcoming = planBetween(addDays(o.today, 1), addDays(o.today, 7)).filter((i) => i.status !== "posted").slice(0, 3);
-  const doneSet = new Set((db().prepare("SELECT task FROM task_checks WHERE day = ?").all(o.today) as { task: string }[]).map((r) => r.task));
-  const sync = lastSync();
+  const data = useData();
+  const today = dubaiDay();
+  const [checks, setChecks] = useStored<Record<string, string[]>>("checks", {});
+  const [edits] = useStored<PlanEdits>("plan", {});
+  const o = useMemo(() => (data ? overview(data.posts, data.account, data.live, today) : null), [data, today]);
+  if (!data || !o) return <Loading title="Today" />;
+
+  const ws = weekStart(today);
+  const week = [...weekPlan(ws, edits), ...weekPlan(addDays(ws, 7), edits)];
+  const todays = week.filter((i) => i.day === today && i.status !== "skipped");
+  const upcoming = week.filter((i) => i.day > today && i.day <= addDays(today, 7) && i.status !== "posted").slice(0, 3);
+  const done = new Set(checks[today] || []);
 
   const items: CheckItem[] = [
-    ...todays.map((t) => ({ key: `post-${t.id}`, label: `Post a ${t.format}: ${t.title}`, sub: `${t.pillar} · best time ${t.best_time} · hook: “${t.hook}”`, done: doneSet.has(`post-${t.id}`) || t.status === "posted" })),
-    ...DAILY_HABITS.map((h) => ({ key: h.key, label: h.label, done: doneSet.has(h.key) })),
+    ...todays.map((t) => ({ key: `post-${t.id}`, label: `Post a ${t.format}: ${t.title}`, sub: `${t.pillar} · best time ${t.best_time} · hook: “${t.hook}”`, done: done.has(`post-${t.id}`) || t.status === "posted" })),
+    ...DAILY_HABITS.map((h) => ({ key: h.key, label: h.label, done: done.has(h.key) })),
   ];
+  const toggle = (key: string, on: boolean) =>
+    setChecks((c) => {
+      const s = new Set(c[today] || []);
+      if (on) s.add(key); else s.delete(key);
+      // keep only the last 30 days
+      const keep = Object.fromEntries(Object.entries(c).filter(([d]) => d >= addDays(today, -30)));
+      return { ...keep, [today]: [...s] };
+    });
   const doneCount = items.filter((i) => i.done).length;
-
   const reachDelta = o.olderReach ? Math.round(((o.recentReach - o.olderReach) / o.olderReach) * 100) : 0;
-  const postedThisWeek = week.filter((i) => i.status === "posted").length;
-  const weekProgress = Math.max(postedThisWeek, o.postsThisWeek);
+  const postedThisWeek = weekPlan(ws, edits).filter((i) => i.status === "posted").length;
+  const weekProgress = Math.max(postedThisWeek, data.live ? o.postsThisWeek : 0);
 
   return (
     <>
       <header className="band">
         <div className="row">
           <div className="grow">
-            <div className="eyebrow">{prettyDay(o.today)}</div>
+            <div className="eyebrow">{prettyDay(today)}</div>
             <h1>Today</h1>
             <div className="sub">{doneCount} of {items.length} tasks done{todays.length ? " · a post is planned today" : " · no post planned today — focus on Stories"}</div>
           </div>
           <Link href="/settings" className="pill" title="Settings">
-            <span className={`livedot${connected ? "" : " off"}`} />
-            {connected ? (sync ? `Synced ${prettyDate(sync.at)}` : "Connected") : "Connect Instagram"}
+            <span className={`livedot${data.live ? "" : " off"}`} />
+            {data.live ? `Updated ${prettyDate(data.generatedAt)}` : "Not connected"}
             <span style={{ width: 16, height: 16, marginLeft: 8, display: "inline-flex" }}><SettingsIcon /></span>
           </Link>
         </div>
@@ -55,13 +66,13 @@ export default function Today() {
       </header>
 
       <div className="content">
-        {!connected && (
-          <div className="note warn">Instagram is not connected, so these numbers are from the last import ({o.last ? "posts up to " + prettyDate(o.last.posted_at) : "none"}). <Link href="/settings" style={{ textDecoration: "underline", fontWeight: 600 }}>Connect it in Settings</Link> to get live numbers.</div>
+        {!data.live && (
+          <div className="note warn">Instagram is not connected yet, so these numbers stop at {o.last ? prettyDate(o.last.posted_at) : "—"}. <Link href="/settings" style={{ textDecoration: "underline", fontWeight: 600 }}>See how to connect</Link>.</div>
         )}
         <div className="grid2">
           <section className="card">
             <div className="hd"><h2>To do today</h2><span className="meta">{doneCount}/{items.length}</span></div>
-            <div className="bd"><Checklist day={o.today} items={items} /></div>
+            <div className="bd"><Checklist items={items} onToggle={toggle} /></div>
           </section>
           <section className="card">
             <div className="hd"><h2>Coach says</h2></div>

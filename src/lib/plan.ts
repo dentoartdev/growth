@@ -1,6 +1,4 @@
-import "server-only";
-import { db } from "./db";
-import { addDays, weekStart } from "./dates";
+import { addDays, parseDay } from "./dates";
 
 // The weekly rhythm: 4 posts + daily Stories. Each slot has a job.
 export const WEEK_RHYTHM = [
@@ -12,7 +10,7 @@ export const WEEK_RHYTHM = [
 
 type Idea = { title: string; hook: string; caption: string; cta: string };
 
-// Idea bank per pillar. The planner cycles through these week by week.
+// Idea bank per pillar. The planner rotates through these week by week.
 const IDEAS: Record<string, Idea[]> = {
   Transformation: [
     { title: "Before / after smile — 8 E.max veneers", hook: "She hid her smile for 10 years.", caption: "From worn and dark to natural and bright. Every veneer layered by hand in our Dubai lab.", cta: "Doctors: send us your next smile case." },
@@ -41,33 +39,24 @@ const IDEAS: Record<string, Idea[]> = {
 };
 
 export type PlanItem = {
-  id: number; day: string; slot: string; format: string; pillar: string; title: string; hook: string | null;
-  caption: string | null; cta: string | null; best_time: string | null; status: string; notes: string | null;
+  id: string; day: string; slot: string; format: string; pillar: string; title: string; hook: string;
+  caption: string; cta: string; best_time: string; status: string; notes: string;
 };
 
-/** Make sure the next `weeks` weeks (starting this week) have a plan. Never overwrites existing items. */
-export function ensurePlan(today: string, weeks = 4) {
-  const d = db();
-  const first = weekStart(today);
-  // A stable week number so the idea bank rotates.
-  const weekNo = (day: string) => Math.floor(new Date(day + "T12:00:00Z").getTime() / (7 * 86400000));
-  const insert = d.prepare(
-    "INSERT INTO plan_items (day, slot, format, pillar, title, hook, caption, cta, best_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-  );
-  for (let w = 0; w < weeks; w++) {
-    const ws = addDays(first, w * 7);
-    const exists = d.prepare("SELECT 1 FROM plan_items WHERE day >= ? AND day < ? LIMIT 1").get(ws, addDays(ws, 7));
-    if (exists) continue;
-    for (const r of WEEK_RHYTHM) {
-      const bank = IDEAS[r.pillar];
-      const idea = bank[weekNo(ws) % bank.length];
-      insert.run(addDays(ws, r.offset), r.slot, r.format, r.pillar, idea.title, idea.hook, idea.caption, idea.cta, r.best_time);
-    }
-  }
-}
+/** Saved changes per item (status, edits), kept in this browser. */
+export type PlanEdits = Record<string, Partial<Pick<PlanItem, "status" | "title" | "hook" | "caption" | "cta" | "notes">>>;
 
-export function planBetween(from: string, to: string): PlanItem[] {
-  return (db().prepare("SELECT * FROM plan_items WHERE day >= ? AND day <= ? ORDER BY day, id").all(from, to) as unknown as PlanItem[]).map((r) => ({ ...r }));
+const weekNo = (monday: string) => Math.floor(parseDay(monday).getTime() / (7 * 86400000));
+
+/** The 4 planned posts for the week that starts on `monday`, with any saved edits applied. */
+export function weekPlan(monday: string, edits: PlanEdits = {}): PlanItem[] {
+  return WEEK_RHYTHM.map((r) => {
+    const bank = IDEAS[r.pillar];
+    const idea = bank[weekNo(monday) % bank.length];
+    const day = addDays(monday, r.offset);
+    const id = `${day}-${r.slot}`;
+    return { id, day, slot: r.slot, format: r.format, pillar: r.pillar, best_time: r.best_time, status: "idea", notes: "", ...idea, ...edits[id] };
+  });
 }
 
 // Daily habits shown on Today, on top of the day's planned post.
