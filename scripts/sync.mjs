@@ -16,7 +16,7 @@ const old = JSON.parse(fs.readFileSync(FILE, "utf8"));
 const save = (d) => fs.writeFileSync(FILE, JSON.stringify(d));
 
 async function get(p) {
-  const url = `${GRAPH}${p}${p.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`;
+  const url = `${p.startsWith("http") ? p : GRAPH + p}${p.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`;
   const r = await fetch(url);
   const j = await r.json();
   if (!r.ok || j.error) throw new Error(j.error?.message || `HTTP ${r.status}`);
@@ -42,7 +42,7 @@ try {
   for (let page = 0; page < 10 && next; page++) {
     const j = await get(next);
     fresh.push(...j.data);
-    next = j.paging?.next ? j.paging.next.replace(GRAPH, "").replace(/[?&]access_token=[^&]+/, "") : "";
+    next = j.paging?.next ? j.paging.next.replace(/([?&])access_token=[^&]+&?/, "$1").replace(/[?&]$/, "") : "";
   }
 
   fs.mkdirSync(THUMBS, { recursive: true });
